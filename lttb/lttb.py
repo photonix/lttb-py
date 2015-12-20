@@ -23,7 +23,7 @@ SOFTWARE.
 """
 
 import math
-
+import pandas as pd
 
 class LttbException(Exception):
     pass
@@ -34,9 +34,10 @@ def largest_triangle_three_buckets(data, threshold):
     Return a downsampled version of data.
     Parameters
     ----------
-    data: list of lists/tuples
+    data: list of lists/tuples or pandas Series
         data must be formated this way: [[x,y], [x,y], [x,y], ...]
                                     or: [(x,y), (x,y), (x,y), ...]
+                                    or: df['y'] with x as DatetimeIndex
     threshold: int
         threshold must be >= 2 and <= to the len of data
     Returns
@@ -45,13 +46,20 @@ def largest_triangle_three_buckets(data, threshold):
     """
 
     # Check if data and threshold are valid
-    if not isinstance(data, list):
-        raise LttbException("data is not a list")
+    if not isinstance(data, (list, pd.Series)):
+        raise LttbException("data is not a list or pandas Series")
     if not isinstance(threshold, int) or threshold <= 2 or threshold >= len(data):
         raise LttbException("threshold not well defined")
-    for i in data:
-        if not isinstance(i, (list, tuple)) or len(i) != 2:
-            raise LttbException("datapoints are not lists or tuples")
+    if isinstance(data, list):
+        for i in data:
+            if not isinstance(i, (list, tuple)) or len(i) != 2:
+                raise LttbException("datapoints are not lists or tuples")
+    if isinstance(data, pd.Series):
+        if not isinstance(data.index, pd.DatetimeIndex):
+            raise LttbException("pandas Series is not with DatetimeIndex")
+        else:
+            df = data.copy()
+            data = zip((df.index-df.index[0]).astype('timedelta64[s]').tolist(), df.tolist())
 
     # Bucket size. Leave room for start and end data points
     every = (len(data) - 2) / (threshold - 2)
@@ -108,5 +116,9 @@ def largest_triangle_three_buckets(data, threshold):
         a = next_a  # This a is the next a (chosen b)
 
     sampled.append(data[len(data) - 1])  # Always add last
+
+    if 'df' in vars():
+        sampled = pd.Series(data=[x[1] for x in sampled], index = df.index[0]+pd.to_timedelta([x[0] for x in sampled], unit='s'),
+                               name=df.name)
 
     return sampled
